@@ -7,10 +7,12 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
+     - name: Copy folder content recursively to remote
+       uses: garygrossgarten/github-action-scp@release
+       with:
+          local: demo
+          remote: scp/directory
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.SSH_USER }}
+          password: ${{ secrets.PASSWORD }}
 
-      - name: Copy files to VM
-        run: |
-          # Replace with your actual script or commands to copy files to VM
-          cp -r ./test.txt tpadala@172.17.10.192:C:\Users\tpadala
