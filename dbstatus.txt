@@ -1,0 +1,285 @@
+Add-Type -path "C:\Program Files\WindowsPowerShell\Modules\SqlServer\21.1.18256\Microsoft.SqlServer.Smo.dll"
+[boolean]$debug = $true;
+#Add-PSSnapin SqlServerCmdletSnapin110
+#Add-PSSnapin SqlServerProviderSnapin110
+cls
+write-host $servername
+$starttime = Get-Date
+write-host $starttime
+#[string[]]$servername = Get-Content -Path D:\\scripts\\ServersList.txt
+$selectedservername = $($env:SERVERNAME)
+if($selectedservername -eq DWCL1D){
+$servername = "DWCL1D\inst1"
+write-host Starting Server $servername
+$dataSource  =  $servername 
+##setup data source
+$database = "master"                                 ##Database name
+$TableHeader = "DWCL1D Databases status"      ##The title of the HTML page
+$path = "D:\\"
+$name = $dataSource
+$name1 = "DWCL1D\dbstatus"
+$OutputFile_new = "$path$name1.html"             ##The file location
+$a = "<style>"
+$a = $a + "BODY{background-color:white;}"
+$a = $a + "TABLE{width: 70%;border-width: 1px;border-style: solid;border-color: #2F4F4F;border-collapse: collapse;}"
+$a = $a + "TH{border-width: 1px;padding: 1px;border-style: solid;border-color: #2F4F4F;;background-color:#8FBC8F}"
+$a = $a + "TD{border-width: 1px;padding: 0px;border-style: solid;border-color: #2F4F4F;}"
+$a = $a + "</style>"
+$colorTagTable = @{
+                    Stopped = ' bgcolor="RED">Stopped<';
+		    Read_Write = ' bgcolor="Green">Read_Write<';
+                    Read_Only = ' bgcolor="Red">Read_Only<';
+                    Running = ' bgcolor="Green">Running<';
+                    OFFLINE = ' bgcolor="RED">OFFLINE<';
+                    ONLINE  = ' bgcolor="Green">ONLINE<';
+		    RESTORING = ' bgcolor="RED">RESORING<';
+		    RECOVERING = ' bgcolor="RED">RECOVERING<';
+		    RECOVERY_PENDING = ' bgcolor="RED">RECOVERY PENDING<';
+		    SUSPECT = ' bgcolor="RED">SUSPECT<';
+		    EMERGENCY = ' bgcolor="RED">EMERGENCY<';
+                
+                   } 
+
+
+
+#$userid="sa"
+#$Password="1apple@day"
+$userid=$($env:SQL_USERNAME)
+$Password=$($env:SQL_PASSWORD)
+#$userid= $cred.username
+#$password=$cred.GetNetworkCredential().password
+##Create a string variable with all our connection details 
+#$connectionDetails = "Provider=sqloledb; " + "Data Source=$dataSource; 
+#" + "Initial Catalog=$database; " + "Integrated Security=SSPI;" 
+# Create the connection string
+$connectionString = "Server=$servername;Database=$database;User ID=$userid;Password=$Password;"
+# Create a new SqlConnection object
+$connection = New-Object System.Data.SqlClient.SqlConnection
+##**************************************
+##Database states
+##**************************************
+$SQLServerDatabaseState = "
+IF EXISTS (SELECT * FROM tempdb.dbo.sysobjects WHERE ID = OBJECT_ID('tempdb..#tmp_database'))
+BEGIN
+drop table #tmp_database
+END
+declare @count int
+declare @name varchar(128)
+declare @state_desc varchar(128)
+select @count = COUNT(*) from sys.databases where state_desc not in ('ONLINE')
+create table #tmp_database (name nvarchar(128),state_desc nvarchar(128))
+if @count > 0
+        begin
+            Declare Cur1 cursor for select name,state_desc from sys.databases 
+            where state_desc not in ('ONLINE')
+        open Cur1
+            FETCH NEXT FROM Cur1 INTO @name,@state_desc
+            WHILE @@FETCH_STATUS = 0
+                BEGIN
+                    insert into #tmp_database values(@name,@state_desc);
+                    FETCH NEXT FROM Cur1 INTO @name,@state_desc
+                END
+            CLOSE Cur1
+            DEALLOCATE Cur1
+        end
+else
+    begin
+        insert into #tmp_database values('ALL DATABASES ARE ','ONLINE')
+    end
+if @count > 0
+   begin
+     Declare Cur2 cursor for
+	 select name,state_desc from sys.databases 
+            where state_desc not in ('ONLINE','OFFLINE','RESTORING','RECOVERING','RECOVERY PENDING','SUSPECT','EMERGENCY','OFFLINE')
+	        open Cur2
+            FETCH NEXT FROM Cur2 INTO @name,@state_desc
+            WHILE @@FETCH_STATUS = 0
+                BEGIN
+                    insert into #tmp_database values(@name,'HUNG STATE')
+                FETCH NEXT FROM Cur2 INTO @name,@state_desc
+                END
+            CLOSE Cur2
+            DEALLOCATE Cur2
+    end
+	     
+select name as DBName ,state_desc as DBStatus from #tmp_database
+"
+$connection = New-Object System.Data.SqlClient.SqlConnection $connectionString
+$command2 = New-Object system.data.sqlclient.sqlcommand $SQLServerDatabaseState,$connection
+$connection.Open()
+##Get the results of our command into a DataSet object, and close the connection
+$dataAdapter = New-Object System.Data.sqlclient.sqlDataAdapter $command2
+$dataSet2 = New-Object System.Data.DataSet
+$dataAdapter.Fill($dataSet2)
+$connection.Close()
+$frag1 = $dataSet2.Tables | Select-Object -Expand Rows |Select -Property DBName,DBStatus | 
+ConvertTo-HTML -AS Table -Fragment -PreContent '<h1 style="color:#2F4F4F">Database Status</h1>'|Out-String
+$colorTagTable.Keys | foreach { $frag1 = $frag1 -replace ">$_<",($colorTagTable.$_) }
+write-host $frag1
+##**************************************
+##Final Code to Combine all fragments
+##**************************************
+ConvertTo-HTML -head $a -PostContent $frag1 -PreContent '<h1 style="color:#2F4F4F"><center><U>DWCL1D server Databases status</U></center></h1>'| Out-File $OutputFile_new -Force
+#$fromaddress = "satish.jagarlamudi@teachforamerica.org" 
+$fromaddress= $($env:From)
+#$toaddress = "TrimukeshReddy.Padala@teachforamerica.org" 
+$toaddress= $($env:To)
+$Subject = "Database status Report($dataSource)" 
+$body = Get-content "D:\\DWCL1D\\dbstatus.html" 
+#$attachment = "D:\\DWCL1D\\inst1.html" 
+$smtpserver = "plsmtp1.prod.tfanet.org" 
+  
+ 
+$message = new-object System.Net.Mail.MailMessage 
+$message.From = $fromaddress 
+$message.To.Add($toaddress) 
+#$message.CC.Add($CCaddress) 
+#$message.Bcc.Add($bccaddress) 
+$message.IsBodyHtml = $True 
+$message.Subject = $Subject 
+#$attach = new-object Net.Mail.Attachment($attachment) 
+#$message.Attachments.Add($attachment) 
+$message.body = $body 
+$smtp = new-object Net.Mail.SmtpClient($smtpserver) 
+$smtp.Send($message) 
+$Stoptime = Get-Date
+Write-host $Stoptime
+}
+
+else {
+$servername="PTWCL1D\inst1"
+   write-host Starting Server $servername
+$dataSource  =  $servername 
+##setup data source
+$database = "master"                                 ##Database name
+$TableHeader = "PTWCL1D Databases status"      ##The title of the HTML page
+$path = "D:\\"
+$name = $dataSource
+$name1 = "PTWCL1D\dbstatus"
+$OutputFile_new = "$path$name1.html"             ##The file location
+$a = "<style>"
+$a = $a + "BODY{background-color:white;}"
+$a = $a + "TABLE{width: 70%;border-width: 1px;border-style: solid;border-color: #2F4F4F;border-collapse: collapse;}"
+$a = $a + "TH{border-width: 1px;padding: 1px;border-style: solid;border-color: #2F4F4F;;background-color:#8FBC8F}"
+$a = $a + "TD{border-width: 1px;padding: 0px;border-style: solid;border-color: #2F4F4F;}"
+$a = $a + "</style>"
+$colorTagTable = @{
+                    Stopped = ' bgcolor="RED">Stopped<';
+		    Read_Write = ' bgcolor="Green">Read_Write<';
+                    Read_Only = ' bgcolor="Red">Read_Only<';
+                    Running = ' bgcolor="Green">Running<';
+                    OFFLINE = ' bgcolor="RED">OFFLINE<';
+                    ONLINE  = ' bgcolor="Green">ONLINE<';
+		    RESTORING = ' bgcolor="RED">RESORING<';
+		    RECOVERING = ' bgcolor="RED">RECOVERING<';
+		    RECOVERY_PENDING = ' bgcolor="RED">RECOVERY PENDING<';
+		    SUSPECT = ' bgcolor="RED">SUSPECT<';
+		    EMERGENCY = ' bgcolor="RED">EMERGENCY<';
+                
+                   } 
+
+
+
+$userid="sa"
+$Password="1apple@day"
+#$userid=$($env:SQL_USERNAME)
+#$Password=$($env:SQL_PASSWORD)
+#$userid= $cred.username
+#$password=$cred.GetNetworkCredential().password
+##Create a string variable with all our connection details 
+#$connectionDetails = "Provider=sqloledb; " + "Data Source=$dataSource; 
+#" + "Initial Catalog=$database; " + "Integrated Security=SSPI;" 
+# Create the connection string
+$connectionString = "Server=$servername;Database=$database;User ID=$userid;Password=$Password;"
+# Create a new SqlConnection object
+$connection = New-Object System.Data.SqlClient.SqlConnection
+##**************************************
+##Database states
+##**************************************
+$SQLServerDatabaseState = "
+IF EXISTS (SELECT * FROM tempdb.dbo.sysobjects WHERE ID = OBJECT_ID('tempdb..#tmp_database'))
+BEGIN
+drop table #tmp_database
+END
+declare @count int
+declare @name varchar(128)
+declare @state_desc varchar(128)
+select @count = COUNT(*) from sys.databases where state_desc not in ('ONLINE')
+create table #tmp_database (name nvarchar(128),state_desc nvarchar(128))
+if @count > 0
+        begin
+            Declare Cur1 cursor for select name,state_desc from sys.databases 
+            where state_desc not in ('ONLINE')
+        open Cur1
+            FETCH NEXT FROM Cur1 INTO @name,@state_desc
+            WHILE @@FETCH_STATUS = 0
+                BEGIN
+                    insert into #tmp_database values(@name,@state_desc);
+                    FETCH NEXT FROM Cur1 INTO @name,@state_desc
+                END
+            CLOSE Cur1
+            DEALLOCATE Cur1
+        end
+else
+    begin
+        insert into #tmp_database values('ALL DATABASES ARE ','ONLINE')
+    end
+if @count > 0
+   begin
+     Declare Cur2 cursor for
+	 select name,state_desc from sys.databases 
+            where state_desc not in ('ONLINE','OFFLINE','RESTORING','RECOVERING','RECOVERY PENDING','SUSPECT','EMERGENCY','OFFLINE')
+	        open Cur2
+            FETCH NEXT FROM Cur2 INTO @name,@state_desc
+            WHILE @@FETCH_STATUS = 0
+                BEGIN
+                    insert into #tmp_database values(@name,'HUNG STATE')
+                FETCH NEXT FROM Cur2 INTO @name,@state_desc
+                END
+            CLOSE Cur2
+            DEALLOCATE Cur2
+    end
+	     
+select name as DBName ,state_desc as DBStatus from #tmp_database
+"
+$connection = New-Object System.Data.SqlClient.SqlConnection $connectionString
+$command2 = New-Object system.data.sqlclient.sqlcommand $SQLServerDatabaseState,$connection
+$connection.Open()
+##Get the results of our command into a DataSet object, and close the connection
+$dataAdapter = New-Object System.Data.sqlclient.sqlDataAdapter $command2
+$dataSet2 = New-Object System.Data.DataSet
+$dataAdapter.Fill($dataSet2)
+$connection.Close()
+$frag1 = $dataSet2.Tables | Select-Object -Expand Rows |Select -Property DBName,DBStatus | 
+ConvertTo-HTML -AS Table -Fragment -PreContent '<h1 style="color:#2F4F4F">Database Status</h1>'|Out-String
+$colorTagTable.Keys | foreach { $frag1 = $frag1 -replace ">$_<",($colorTagTable.$_) }
+write-host $frag1
+##**************************************
+##Final Code to Combine all fragments
+##**************************************
+ConvertTo-HTML -head $a -PostContent $frag1 -PreContent '<h1 style="color:#2F4F4F"><center><U>PTWCL1D server Databases status</U></center></h1>'| Out-File $OutputFile_new -Force
+$fromaddress = "TrimukeshReddy.Padala@teachforamerica.org" 
+#$fromaddress= $($env:From)
+$toaddress = "TrimukeshReddy.Padala@teachforamerica.org" 
+#$toaddress= $($env:To)
+$Subject = "Database status Report($dataSource)" 
+$body = Get-content "D:\\PTWCL1D\\dbstatus.html" 
+#$attachment = "D:\\PTWCL1D\\inst1.html" 
+$smtpserver = "plsmtp1.prod.tfanet.org" 
+  
+ 
+$message = new-object System.Net.Mail.MailMessage 
+$message.From = $fromaddress 
+$message.To.Add($toaddress) 
+#$message.CC.Add($CCaddress) 
+#$message.Bcc.Add($bccaddress) 
+$message.IsBodyHtml = $True 
+$message.Subject = $Subject 
+#$attach = new-object Net.Mail.Attachment($attachment) 
+#$message.Attachments.Add($attachment) 
+$message.body = $body 
+$smtp = new-object Net.Mail.SmtpClient($smtpserver) 
+$smtp.Send($message) 
+$Stoptime = Get-Date
+Write-host $Stoptime
+}

@@ -1,0 +1,17 @@
+git config --global credential.helper 'store --file ~/.git-credentials'
+printf "protocol=https\nhost=github.com\nusername=<username>\npassword=<token>\n" >> ~/.git-credentials
+git config --global credential.helper
+
+rundll32.exe keymgr.dll, KRShowKeyMgr   - git credentials manager
+
+
+
+ server                       jobs name                          username
+ DWCL1D    -   permissions job & sqlagentjobs_backup job -  Satish-Jagarlamudi_tfa
+ PTWCL1D    -   permissions job & sqlagentjobs_backup job -  Satish-Jagarlamudi_tfa
+ PWCL4D    -   permissions job & sqlagentjobs_backup job -  Satish-Jagarlamudi_tfa
+
+
+
+
+git credential-manager store --username Satish-Jagarlamudi_tfa --password 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
