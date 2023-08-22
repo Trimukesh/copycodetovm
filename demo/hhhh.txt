@@ -1,0 +1,13 @@
+manual approval-apr 4-14
+cron jobs -2days
+database login to check db status -2days
+file created but can't update that file 
+sql sanity check report pipeline-3weeks
+big query research-2days
+azure key vault-secrets,parameters,direct values-may
+first database level and then azure key vault-may
+may 11-Power of IBM Instana in Enhancing Application Performance Management
+may24-Infra Team Meeting
+may 17-security certification program
+apr-14,21,28-shantan call(miracle team discussion)
+may-5,12,19,25-shantan call(miracle team discussion)
